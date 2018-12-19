@@ -1,6 +1,7 @@
 import tornado.ioloop
 import tornado.web
 from lenovotf.web.handler.fileHandler import FileHandler
+import logging
 
 try:
     from urllib.parse import unquote
@@ -21,5 +22,7 @@ def make_app():
 
 if __name__ == "__main__":
     app = make_app()
-    app.listen(8888)
+    port = 8888
+    app.listen(port)
+    logging.info("start tornado web server  on port：%s" % port)
     tornado.ioloop.IOLoop.current().start()

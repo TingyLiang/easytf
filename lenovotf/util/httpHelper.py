@@ -1,4 +1,4 @@
-"""Usage: python fileUploader.py [--put] file1.txt file2.png ...
+"""Usage: python httpHelper.py [--put] file1.txt file2.png ...
 Demonstrates uploading files to a server, without concurrency. It can either
 POST a multipart-form-encoded request containing one or more files, or PUT a
 single file without encoding.
@@ -10,6 +10,7 @@ import os
 import sys
 from functools import partial
 from uuid import uuid4
+import lenovotf.util.AppConfiger as configer
 
 try:
     from urllib.parse import quote
@@ -22,8 +23,12 @@ from tornado.options import define, options
 import logging
 
 logging.basicConfig(level=logging.INFO)
+import lenovotf.util.confReader as reader
 
-SERVER_URL = "http://172.17.171.108:8080"
+SERVER_URL = reader.get_web_server_url()
+
+
+# SERVER_URL = "http://localhost:8888"
 
 
 # Using HTTP POST, upload one or more files in a single multipart-form-encoded
@@ -31,7 +36,6 @@ SERVER_URL = "http://172.17.171.108:8080"
 @gen.coroutine
 def multipart_producer(boundary, filenames, write):
     boundary_bytes = boundary.encode()
-
     for filename in filenames:
         filename_bytes = filename.encode()
         mtype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
@@ -73,7 +77,7 @@ def post(filenames, server_url):
         body_producer=producer,
     )
 
-    print(response)
+    logging.info(response)
 
 
 @gen.coroutine
@@ -116,7 +120,13 @@ def upload_file(filenames):
         sys.exit(1)
     # method = put if options.put else post
     method = post
+    print(SERVER_URL)
     ioloop.IOLoop.current().run_sync(lambda: method(filenames, SERVER_URL))
+
+
+def deploy_to_cluster(cluster):
+    pass
+
 
 if __name__ == "__main__":
     define("put", type=bool, help="Use PUT instead of POST", group="file uploader")

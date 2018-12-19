@@ -2,10 +2,15 @@
 import logging
 import os
 import uuid
+import sys
+import platform
+import re
 
 import lenovotf.rpc.central.client as cClient
-import lenovotf.util.fileUploader as fuploader
-import lenovotf.util.zipHelper as zipHelper
+import lenovotf.util.httpHelper as fuploader
+import lenovotf.util.packagedepends as packagedepends
+import configparser
+import lenovotf.util.confReader as reader
 
 '''the API client who connect API Server to execute commands from driver, include:
 1. create a new cluster for user
@@ -16,14 +21,15 @@ import lenovotf.util.zipHelper as zipHelper
 '''
 logging.basicConfig(level=logging.INFO)  # 设置日志级别
 
-# TODO 此处应该读取配置文件，暂时硬编码
-CRNTRAL_ENDPOINT = "tcp://171.17.17.108:14243"
+CRNTRAL_ENDPOINT = reader.get_rpc_server_url()
+GLOABLE_CONFIG_PATH = None
 
 
 class Client:
     def __init__(self):
         self.cRpcClient = cClient.CentralRPCClient(CRNTRAL_ENDPOINT)
         self._app_id = str(uuid.uuid1())
+        # self.cRpcClient.start()
         self.cluster = None
 
     def new_cluster(self):
@@ -34,6 +40,14 @@ class Client:
         # TODO 解析集群信息
         # cluster = data
         logging.info('cluster info:' + str(data))
+        self.cluster = {
+            'cluster': {'chief': ['192.168.11.39:2222'],
+                        'ps': ['192.168.11.39:2223', '192.168.11.39:2224'],
+                        'worker': ['192.168.11.39:2224', '192.168.11.39:2225']},
+            'hosts': [{'host': '192.168.11.39:2222', 'task': {'type': 'chief', 'index': 0}},
+                      {'host': '192.168.11.39:2224', 'task': {'type': 'worker', 'index': 0}},
+                      {'host': '192.168.11.39:2225', 'task': {'type': 'worker', 'index': 1}}]
+        }
         return True
 
     def do_request(self, request):
@@ -41,11 +55,15 @@ class Client:
         data = {}
         return data
 
-    def upload_data_and_code(self):
-        pardir = os.path.abspath(".")
-        file = zipHelper.zip('.', str(self._app_id))
+    def upload_data_and_code(self, entrance_class=sys.argv[0]):
+        cdir = os.path.abspath(".")
+        # 指定tf启动类作为参数
+        installed = reader.get_pre_installed_depends()
+        file = "F:\\PythonWorkspace\\tf-package-demo\\tf-estimator-cluster-app.zip"
+        # file = packagedepends.package(entrance_class, excludes=installed)
         self.upload_data()
-        self.upload_code(pardir + "/" + file)
+        self.upload_code(file)
+        # self.cRpcClient.dis_code(file, self.cluster)
         return True
 
     def upload_data(self):
@@ -53,18 +71,24 @@ class Client:
         # TODO  压缩数据,并上传到用户目录
         return True
 
-    def upload_code(self, code_file):
-        # 用户源码上传至服务器
+    def upload_code(self, code_file, cluster):
+        # 用户源码上传至服务器,服务端接口代码完成后进行部署
         logging.info('preparing to uploading code...')
         fuploader.upload_file([code_file])
-        # TODO  通过服务器分发代码
-        self.cluster = ["172.17.171.190"]
-        self.cRpcClient.distribute_code(self._app_id, self.cluster)
+        # self.cRpcClient.distribute_code(self._app_id, cluster)
+        self.cRpcClient.dis_code(code_file, cluster)
         return True
 
     def start_train(self):
         logging.info('preparing to start training...')
-        self.cRpcClient.do_train(app_id=self._app_id, train_params={})
+        c = {
+            'cluster': {'chief': ['localhost:2222'],
+                        'ps': ['localhost:2223', 'localhost:2224'],
+                        'worker': ['localhost:2224', 'localhost:2225']},
+            'hosts': [{'host': 'localhost:2222', 'task': {'type': 'worker', 'index': 0}},
+                      {'host': 'localhost:2224', 'task': {'type': 'worker', 'index': 1}}]
+        }
+        self.cRpcClient.train(sys.argv[0])
         # TODO 启动各节点训练脚本，开始训练
         return True
 
@@ -83,6 +107,11 @@ class Client:
     def app_id(self):
         return self._app_id
 
-    @app_id.setter
-    def app_id(self, app_id):
-        self._app_id = app_id
+
+def _init_global_conf_path():
+    abspath = os.path.abspath(__file__)
+    ost = platform.system()
+    # if ost == "Windows":
+
+    # elif ost == "Linux":
+    # else:

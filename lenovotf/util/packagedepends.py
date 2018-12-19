@@ -6,25 +6,27 @@ from modulegraph import find_modules
 from distutils.sysconfig import get_config_vars, get_config_var
 
 import logging
+
 FORMAT = '%(relativeCreated)d %(levelname)s: %(message)s'
 logging.basicConfig(format=FORMAT, level=logging.DEBUG)
 logger = logging.getLogger(os.path.basename(__file__))
 
-_DefaultExcludes = ['pip', 'setuptools', 'pkg_resources', 'distutils', 'logging' ]
-_DefaultExcludes.extend( sys.builtin_module_names )
+_DefaultExcludes = ['pip', 'setuptools', 'pkg_resources', 'distutils', 'logging']
+_DefaultExcludes.extend(sys.builtin_module_names)
 try:
     _DefaultExcludes.append(globals().get('__spec__').name)
 except:
     pass
 
+
 class helper:
-    SitePackages = [ p for p in sys.path if p.find(os.path.normpath('/site-packages')) > 0]
+    SitePackages = [p for p in sys.path if p.find(os.path.normpath('/site-packages')) > 0]
     PythonLib = set(get_config_vars('DESTSHARED', 'DESTLIB', 'LIBDEST', 'BINLIBDEST')) - set([None, ''])
 
     is_win = sys.platform.startswith('win')
     if is_win:
-        SitePackages = [ p.lower() for p in SitePackages ]
-        PythonLib = [ p.lower() for p in PythonLib ]
+        SitePackages = [p.lower() for p in SitePackages]
+        PythonLib = [p.lower() for p in PythonLib]
         Libdest = get_config_var('LIBDEST')
         if Libdest and os.path.isdir(Libdest):
             Dllpath = os.path.join(os.path.dirname(Libdest), 'dlls').lower()
@@ -65,15 +67,16 @@ class helper:
         # No top-level directory found or any error.
         return None
 
+
 def _write_modules(zfile, modules, basepath):
     for (ty, nm, fp) in modules:
-        nmbase, dst = nm.split('.',1)[0] , None
+        nmbase, dst = nm.split('.', 1)[0], None
         if nmbase.find(os.path.sep) >= 0:
             dst = os.path.relpath(fp, basepath)
         else:
-            i = os.path.normpath(fp).find(os.path.normcase('/'+nmbase ))
-            assert i > 0 , "path:{0}, module base:{1}, type:{2}".format(fp, nmbase, ty)
-            dst = fp[i+1:]
+            i = os.path.normpath(fp).find(os.path.normcase('/' + nmbase))
+            assert i > 0, "path:{0}, module base:{1}, type:{2}".format(fp, nmbase, ty)
+            dst = fp[i + 1:]
         logger.info("package module:<%s> , from %s -> %s", nm, fp, dst)
         try:
             zfile.write(fp, dst)
@@ -86,7 +89,7 @@ def _write_files(zfile, binaries_or_datas, workingdir):
     for src_root_path_or_glob, trg_root_dir in binaries_or_datas:
         if not trg_root_dir:
             raise SystemExit("Empty DEST not allowed when adding binary and data files. "
-                             "Maybe you want to used %r.\nCaused by %r." %(os.curdir, src_root_path_or_glob))
+                             "Maybe you want to used %r.\nCaused by %r." % (os.curdir, src_root_path_or_glob))
 
         trg_root_dir = os.path.join(os.path.basename(workingdir), trg_root_dir)
 
@@ -102,15 +105,15 @@ def _write_files(zfile, binaries_or_datas, workingdir):
             src_root_paths = glob.glob(src_root_path_or_glob)
 
         if not src_root_paths:
-            msg = 'Unable to find "%s" when adding binary and data files.' % ( src_root_path_or_glob)
+            msg = 'Unable to find "%s" when adding binary and data files.' % (src_root_path_or_glob)
             raise SystemExit(msg)
 
         for src_root_path in src_root_paths:
             if os.path.isfile(src_root_path):
                 # Normalizing the result to remove redundant relative
                 # paths (e.g., removing "./" from "trg/./file").
-                toc_datas.add( (os.path.normpath(os.path.join(trg_root_dir, os.path.basename(src_root_path))),
-                    os.path.normpath(src_root_path)) )
+                toc_datas.add((os.path.normpath(os.path.join(trg_root_dir, os.path.basename(src_root_path))),
+                               os.path.normpath(src_root_path)))
             elif os.path.isdir(src_root_path):
                 for src_dir, src_subdir_basenames, src_file_basenames in os.walk(src_root_path):
                     assert src_dir.startswith(src_root_path)
@@ -131,6 +134,7 @@ def _write_files(zfile, binaries_or_datas, workingdir):
         logger.info("package file: from %s -> %s", src, dst)
         zfile.write(src, dst)
 
+
 def _write_requires(zfile, requires):
     if not requires:
         return
@@ -144,6 +148,18 @@ def _write_requires(zfile, requires):
     logger.info("package file: from %s -> %s", reqfile, dst)
     zfile.write(reqfile, dst)
 
+
+def _get_installed_modules():
+    pkgs = {}
+    for d in pkg_resources.working_set:
+        topmodules = [m for m in d._get_metadata('top_level.txt')]
+        if not topmodules:
+            topmodules.append(d.project_name)
+        for m in topmodules:
+            pkgs[m] = (d.project_name, d.version)
+    return pkgs
+
+
 def package(scripts, name=None, pathex=None, datas=None, binaries=None, includes=None, excludes=None):
     '''
      usage: package(__file__, datas=[(src,dst), (src, dst), ])
@@ -156,7 +172,7 @@ def package(scripts, name=None, pathex=None, datas=None, binaries=None, includes
     :param excludes:
     :return: the zipfile path
     '''
-    excludes, includes, inputs  = excludes or [], includes or [], []
+    excludes, includes, inputs = excludes or [], includes or [], []
     scripts = [scripts] if isinstance(scripts, str) else scripts
     if not isinstance(scripts, (tuple, list)):
         raise ValueError("scripts parameters must be str or tuple or list ")
@@ -172,42 +188,44 @@ def package(scripts, name=None, pathex=None, datas=None, binaries=None, includes
     inputs.extend(sys.path + (pathex or []))
     basepath = os.path.abspath(os.path.dirname(scripts[0]))
 
-    installed_pkgs = dict((d.project_name, d.version) for d in pkg_resources.working_set)
+    installed_pkgs = _get_installed_modules()
+    logger.info(installed_pkgs)
 
     logger.info("trying to analysis dependents , please wait ...")
-    mf = find_modules.find_modules(scripts=scripts, includes=includes, excludes=excludes + _DefaultExcludes, path=inputs)
+    mf = find_modules.find_modules(scripts=scripts, includes=includes, excludes=excludes + _DefaultExcludes,
+                                   path=inputs)
     requires, depends_thirds, depends_selfmod = {}, [], []
-    for m in mf.flatten() :
+    for m in mf.flatten():
         ty, nm, fn = type(m).__name__, m.identifier, m.filename
-        if not ty in ['MissingModule', 'AliasNode', 'BuiltinModule', 'ExcludedModule']:
+        if not ty in ['MissingModule', 'AliasNode', 'BuiltinModule', 'ExcludedModule', 'NamespacePackage']:
             logger.info("check type:%s, module:%s, path:%s", ty, nm, fn)
-            ver = installed_pkgs.get(nm, None)
+            pkgname, ver = installed_pkgs.get(nm, (None, None))
             if ver:
-                requires[nm] = ver
+                requires[pkgname] = ver
                 continue
             nmbase = nm.split('.', 1)[0]
-            ver = installed_pkgs.get(nmbase, None)
+            pkgname, ver = installed_pkgs.get(nmbase, (None, None))
             if ver:
-                requires[nmbase] = ver
+                requires[pkgname] = ver
                 continue
             sourcetype = helper.source_type(fn)
             if sourcetype == 'PythonLib':
-                logger.debug('###########> ignore python lib type:%s, module:<%s>, %s',ty, nm, fn )
+                logger.debug('###########> ignore python lib type:%s, module:<%s>, %s', ty, nm, fn)
                 pass
             elif sourcetype == 'SitePackages':
                 depends_thirds.append((ty, nm, fn))
-                logger.debug('----------> add site-packages type:%s, module:<%s>, %s',ty, nm, fn )
+                logger.debug('----------> add site-packages type:%s, module:<%s>, %s', ty, nm, fn)
             elif sourcetype == 'UNKOWN':
                 depends_selfmod.append((ty, nm, fn))
-                logger.debug('----------> add self modules type:%s, module:<%s>, %s',ty, nm, fn )
+                logger.debug('----------> add self modules type:%s, module:<%s>, %s', ty, nm, fn)
 
     import zipfile
     zfilepath = name if name else os.path.join(toplevelpath, os.path.basename(scripts[0]))
     zfilepath = os.path.splitext(zfilepath)[0] + '.zip'
-    logger.info("trying to zip dependents to %s", zfilepath )
+    logger.info("trying to zip dependents to %s", zfilepath)
     with zipfile.ZipFile(zfilepath, 'w') as zfile:
-        _write_modules(zfile, depends_thirds + depends_selfmod, toplevelpath )
-        _write_files(zfile, (datas or []) + (binaries or []) , basepath)
+        _write_modules(zfile, depends_thirds + depends_selfmod, toplevelpath)
+        _write_files(zfile, (datas or []) + (binaries or []), basepath)
         _write_requires(zfile, requires)
     logger.info("dependents have been packaged to %s", zfilepath)
-    return zipfile
+    return zfilepath

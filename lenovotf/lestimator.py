@@ -4,6 +4,7 @@ from lenovotf.client import Client
 import os
 import tensorflow.estimator as es
 import logging
+import sys
 
 logging.basicConfig(level=logging.INFO)
 
@@ -20,12 +21,11 @@ def train_and_evaluate(estimator, train_spec, eval_spec):
         # 此处可能存在同步等待的问题
         success = client.new_cluster()
         if success:
-            success = client.upload_data_and_code()
-        if success:
-            success = client.start_train()
+            success = client.upload_data_and_code(entrance_class=sys.argv[0])
+        # if success:
+        #     success = client.start_train()
         # if success:
         # tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
-        # TODO
         client.close()
 
 

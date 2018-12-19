@@ -13,7 +13,7 @@ except ImportError:
 
 logging.basicConfig(level=logging.INFO)
 
-FILE_DIR_PREFIX = "/data/codes/test/"
+FILE_DIR_PREFIX = "/data/tfcodes/upload/"
 
 
 # FILE_DIR_PREFIX = "f:/test/"
@@ -28,16 +28,20 @@ class FileHandler(tornado.web.RequestHandler):
             for info in files:
                 filename, content_type = info["filename"], info["content_type"]
                 body = info["body"]
+                filename = re.sub("\\\\", "/", filename)
                 filename = re.split("/", filename)[-1]
-                cdir = FILE_DIR_PREFIX + re.sub(".tar", "", filename) + "/"
-                file = cdir + filename
+                file = FILE_DIR_PREFIX + filename
                 logging.info("storing file:%s..." % file)
-                os.system("mkdir -p %s" % cdir)
+                if not os.path.exists(FILE_DIR_PREFIX):
+                    os.system("mkdir -p %s" % FILE_DIR_PREFIX)
                 with open(file, 'wb') as f:
                     f.write(body)
                 # print(body)
                 logging.info(
                     'POST "%s" "%s" %d bytes', filename, content_type, len(body)
                 )
+                # to avoid path which contains \ add get pure filename for source codes
+                # code_file = re.sub("\\\\", "/")
+                # code_file = code_file.split("/")[-1]
 
         self.write("OK")

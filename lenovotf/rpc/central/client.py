@@ -27,7 +27,12 @@ class CentralRPCClient:
 
     def distribute_code(self, app_id, cluster):
         logging.info("asking server to distribute code of %s to workers:%s ..." % (app_id, cluster))
-        self.client.do_dis_code(app_id, cluster)
+        file = "F:\\PythonWorkspace\\tf-package-demo\\tf-estimator-cluster-app.zip"
+        self.client.do_disCode(file, cluster)
+
+    def dis_code(self, file, cluster):
+        logging.info("asking server to distribute code of %s to workers:%s ..." % (file, cluster))
+        self.client.do_disCode(file, cluster)
 
 
 if __name__ == '__main__':
@@ -36,8 +41,9 @@ if __name__ == '__main__':
     # endpoint = 'tcp://10.244.0.1:4243'
     # endpoint = 'tcp://127.0.0.1:4243'
     client = CentralRPCClient(endpoint)
-    # client.start()
+    client.start()
+    file = "tf-estimator-cluster-app.zip"
+    client.dis_code(file, ['172.17.171.190'])
     # # client.rain(123, {})
     # client.distribute_code("ac0534fe-fd23-11e8-8ec9-309c23c29f89", ['172.17.171.190'])
     # client.stop()
-

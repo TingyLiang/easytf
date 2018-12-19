@@ -2,6 +2,9 @@
 from datetime import datetime
 from fabric.api import *
 import re
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 # 登录用户和主机名：tf-build
 env.user = 'root'
@@ -79,7 +82,6 @@ def deploy_code(app_id, source_dir, cluster):
     Args:
         source_dir: the source code dir
         cluster:a list of the hosts to send code to
-        target_dir: target code dir to save code on each node
     '''
     remote_tmp_dir = '/tmp/codes/%s' % str(app_id)
     tag = datetime.now().strftime('%y.%m.%d_%H.%M.%S')
@@ -93,3 +95,69 @@ def deploy_code(app_id, source_dir, cluster):
     # print('target dir: %s' + '/%s' % (remote_tmp_dir, file))
     with cd(target_dir):
         run('tar -xzvf %s/%s' % (remote_tmp_dir, re.split('/', source_dir)[-1]))
+
+
+def deploy_code(file, cluster):
+    # env.hosts = cluster
+    '''deploy tf code from server to cluster
+    Args:
+        file: the source code dir
+        cluster:a list of the hosts to send code to
+    '''
+    remote_tmp_dir = '/tmp/codes/'
+    tag = datetime.now().strftime('%y.%m.%d_%H.%M.%S')
+    # run('rm -rf %s' % remote_tmp_dir)
+    # put file to remote server
+    name = file.split("/")[-1].split(".")[0]
+    run("rm -f %s%s" % (remote_tmp_dir, name + ".zip"))
+    run('mkdir -p %s' % remote_tmp_dir)
+    logging.info("start to deploy code by fabric:")
+    try:
+        put(file, remote_tmp_dir)
+    except ValueError as e:
+        raise e
+    except FileNotFoundError as e:
+        raise e
+    target_dir = '/data/codes/%s' % name
+    run("rm -rf %s" % target_dir)
+    run('mkdir -p %s' % target_dir)
+    # run('chmod 722 -R %s' % target_dir)
+    # print('target dir: %s' + '/%s' % (remote_tmp_dir, file)
+    cluster = {
+        'cluster': {'chief': ['192.168.11.39:2222'],
+                    'ps': ['192.168.11.39:2223', '192.168.11.39:2224'],
+                    'worker': ['192.168.11.39:2224', '192.168.11.39:2225']},
+        'hosts': [{'host': '192.168.11.39:2222', 'task': {'type': 'chief', 'index': 0}},
+                  {'host': '192.168.11.39:2224', 'task': {'type': 'worker', 'index': 0}},
+                  {'host': '192.168.11.39:2225', 'task': {'type': 'worker', 'index': 1}}]
+    }
+    with cd(target_dir):
+        run('unzip -q %s%s' % (remote_tmp_dir, name + ".zip"))
+        # TODO 启动训练过程
+
+
+        # cmd = "python  -w 127.0.0.1:2223,127.0.0.1:2224 " \
+        #       "-c 127.0.0.1:2225 -t worker " \
+        #       "-i 0 -m tf_dis/tf-estimator-cluster-app.py " \
+        #       " -l /data/codes/tf-estimator-cluster-app_with_dependences/vendors/lib/python3.6/site-packages" %()
+        import platform
+        pyv = "2.7" if platform.python_version().startswith("2.7") else "3.6"
+        pwd = run("pwd")
+        logging.info("======current dir is " + pwd)
+        path = "%s/vendors/lib/python3.6/site-packages" % pwd
+        # 获取主类路径
+        main_path = run("find  -name %s.py" % name)
+        main_path = pwd + re.sub("\.", "", main_path, 1)
+        main = "tf_dis/tf-estimator-cluster-app.py "
+        import socket
+        for host in cluster["hosts"]:
+            if socket.gethostbyname(socket.gethostname()) == re.split(":", host['host'])[0]:
+                logging.info("start training on host %s" % host['host'])
+                cmd = "python  -w %s " \
+                      "-c %s -t %s " \
+                      "-i %s -m %s " \
+                      " -l %s" % (
+                          ",".join(cluster["cluster"]["worker"]), ",".join(cluster["cluster"]["chief"]),
+                          ",".join(host["task"]["type"]), ",".join(host["task"]["index"]), main, path)
+                logging.info("start training by executing cmd: %s" % cmd)
+                run(cmd)
